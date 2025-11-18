@@ -108,7 +108,7 @@ func main() {
 		if update.Message.NewChatMembers != nil ||             // кто-то добавлен (включая бота)
 		   update.Message.LeftChatMember != nil ||         // кто-то вышел
 		   update.Message.GroupChatCreated ||              // создан обычный групповой чат
-		   update.Message.SuperGroupChatCreated ||         // ← ВОТ ТАК ПРАВИЛЬНО! (с большой G)
+		   update.Message.SuperGroupChatCreated ||         // создан супергрупповой
 		   update.Message.ChannelChatCreated ||            // создан канал
 		   update.Message.MigrateToChatID != 0 ||          // миграция в супергруппу
 		   update.Message.MigrateFromChatID != 0 {
