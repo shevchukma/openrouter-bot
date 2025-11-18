@@ -44,24 +44,25 @@ func getBotCommands(userID int64, conf *config.Config) []tgbotapi.BotCommand {
 			{Command: "reset", Description: lang.Translate("description.reset", conf.Lang)},
 			{Command: "stats", Description: lang.Translate("description.stats", conf.Lang)},
 			{Command: "stop", Description: lang.Translate("description.stop", conf.Lang)},
-			{Command: "пирдун", Description: "Задать вопрос модели"},
+			{Command: "pirdun", Description: lang.Translate("description.pirdun", conf.Lang)},
 		}
 	}
 
 	if role == "user" {
 		return []tgbotapi.BotCommand{
 			{Command: "start", Description: lang.Translate("description.start", conf.Lang)},
-			{Command: "help", Description: "Помощь по доступным командам"},
-			{Command: "reset", Description: "Очистить историю разговора"},
-			{Command: "stop", Description: "Остановить генерацию"},
-			{Command: "пирдун", Description: "Задать вопрос модели"},
+			{Command: "help", Description: lang.Translate("description.helpuser", conf.Lang)},
+			{Command: "reset", Description: lang.Translate("description.reset", conf.Lang)},
+			{Command: "stop", Description: lang.Translate("description.stop", conf.Lang)},
+			{Command: "pirdun", Description: lang.Translate("description.pirdun", conf.Lang)},
 		}
 	}
 
 	// guest
 	return []tgbotapi.BotCommand{
 		{Command: "start", Description: lang.Translate("description.start", conf.Lang)},
-		{Command: "пирдун", Description: "Задать вопрос модели"},
+		{Command: "help", Description: lang.Translate("description.helpuser", conf.Lang)},
+		{Command: "pirdun", Description: lang.Translate("description.pirdun", conf.Lang)},
 	}
 }
 
@@ -110,10 +111,10 @@ func main() {
 		// Обновляем меню команд для пользователя
 		go bot.Request(tgbotapi.NewSetMyCommands(getBotCommands(userID, conf)...))
 
-		// Гости могут только /start, /пирдун и обычные сообщения
+		// Гости могут только /start, /pirdun и обычные сообщения
 		if role == "guest" && update.Message.IsCommand() {
 			cmd := update.Message.Command()
-			if cmd != "start" && cmd != "пирдун" {
+			if cmd != "start" && cmd != "pirdun" {
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "У вас нет доступа к командам.")
 				bot.Send(msg)
 				continue
@@ -135,23 +136,12 @@ func main() {
 			switch cmd {
 			case "start":
 				text := lang.Translate("commands.start", conf.Lang)
-				if role != "guest" {
-					text += "\n\nДоступные команды:\n/пирдун <вопрос>\n/reset\n/stop\n/help"
-				}
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 				msg.ParseMode = "HTML"
 				bot.Send(msg)
 
 			case "help":
-				if role == "guest" {
-					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "У вас ограниченный доступ."))
-					continue
-				}
-				helpText := "<b>Доступные команды:</b>\n\n" +
-					"/пирдун &lt;вопрос&gt; — задать вопрос\n" +
-					"/reset — очистить историю\n" +
-					"/stop — остановить генерацию\n" +
-					"/help — эта справка"
+				helpText = lang.Translate("commands.helpuser", conf.Lang)
 				if role == "admin" {
 					helpText = lang.Translate("commands.help", conf.Lang)
 				}
@@ -160,30 +150,22 @@ func main() {
 				bot.Send(msg)
 
 			case "reset":
-				if role == "guest" {
-					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Очистка истории недоступна для гостей."))
-					continue
-				}
 				userStats.ClearHistory()
 				userStats.SystemPrompt = conf.SystemPrompt
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "История очищена"))
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.reset", conf.Lang)))
 
 			case "stop":
-				if role == "guest" {
-					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Команда /stop недоступна для гостей."))
-					continue
-				}
 				if userStats.CurrentStream != nil {
 					userStats.CurrentStream.Close()
-					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Генерация остановлена"))
+					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.stop", conf.Lang)))
 				} else {
-					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Нечего останавливать"))
+					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.stop_err", conf.Lang)))
 				}
 
-			case "пирдун":
+			case "pirdun":
 				args := update.Message.CommandArguments()
 				if args == "" {
-					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Использование: /пирдун <текст>"))
+					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.pirdun", conf.Lang)))
 					continue
 				}
 				fakeMsg := *update.Message
