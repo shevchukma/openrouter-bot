@@ -69,7 +69,14 @@ func GetFreeModels() (string, error) {
 	return result.String(), nil
 }
 
-func HandleChatGPTStreamResponse(bot *tgbotapi.BotAPI, client *openai.Client, message *tgbotapi.Message, config *config.Config, user *user.UsageTracker) string {
+func HandleChatGPTStreamResponse(
+	bot *tgbotapi.BotAPI,
+	client *openai.Client,
+	message *tgbotapi.Message,
+	config *config.Config,
+	user *user.UsageTracker,
+) string {
+
 	ctx := context.Background()
 	user.CheckHistory(config.MaxHistorySize, config.MaxHistoryTime)
 	user.LastMessageTime = time.Now()
@@ -83,13 +90,11 @@ func HandleChatGPTStreamResponse(bot *tgbotapi.BotAPI, client *openai.Client, me
 	if err != nil {
 		log.Fatalf("Error initializing config manager: %v", err)
 	}
-
 	conf := manager.GetConfig()
 
-	// Send a loading message with animation points
-	loadMessage := lang.Translate("loadText", conf.Lang)
 	errorMessage := lang.Translate("errorText", conf.Lang)
 
+	// Формируем историю сообщений
 	messages := []openai.ChatCompletionMessage{
 		{
 			Role:    openai.ChatMessageRoleSystem,
@@ -113,6 +118,7 @@ func HandleChatGPTStreamResponse(bot *tgbotapi.BotAPI, client *openai.Client, me
 		})
 	}
 
+	// Готовый нестримовый запрос
 	req := openai.ChatCompletionRequest{
 		Model:            config.Model.ModelName,
 		FrequencyPenalty: float32(config.Model.FrequencyPenalty),
@@ -124,40 +130,26 @@ func HandleChatGPTStreamResponse(bot *tgbotapi.BotAPI, client *openai.Client, me
 		Stream:           false,
 	}
 
-	// Error handling and sending a response message
-	stream, err := client.CreateChatCompletionStream(ctx, req)
+	resp, err := client.CreateChatCompletion(ctx, req)
 	if err != nil {
-		fmt.Printf("ChatCompletionStream error: %v\n", err)
-		stopAnimation <- true
-		bot.Send(tgbotapi.NewEditMessageText(message.Chat.ID, lastMessageID, errorMessage))
+		log.Printf("ChatCompletion error: %v\n", err)
+		msg := tgbotapi.NewMessage(message.Chat.ID, errorMessage)
+		bot.Send(msg)
 		return ""
 	}
-	defer stream.Close()
-	user.CurrentStream = stream
 
-	// Stop the animation when we start receiving a response
-	stopAnimation <- true
-	var messageText string
-	responseID := ""
-	log.Printf("User: " + user.UserName + " Stream response. ")
+	answer := resp.Choices[0].Message.Content
 
-if err != nil {
-    msg := tgbotapi.NewMessage(message.Chat.ID, errorMessage)
-    bot.Send(msg)
-    return ""
-}
+	// Записываем в историю
+	user.AddMessage(openai.ChatMessageRoleUser, message.Text)
+	user.AddMessage(openai.ChatMessageRoleAssistant, answer)
 
-answer := resp.Choices[0].Message.Content
-user.AddMessage(openai.ChatMessageRoleUser, message.Text)
-user.AddMessage(openai.ChatMessageRoleAssistant, answer)
+	// Отправляем ответ одним сообщением
+	msg := tgbotapi.NewMessage(message.Chat.ID, answer)
+	msg.ParseMode = tgbotapi.ModeMarkdown
+	bot.Send(msg)
 
-msg := tgbotapi.NewMessage(message.Chat.ID, answer)
-msg.ParseMode = tgbotapi.ModeMarkdown
-
-bot.Send(msg)
-
-return resp.ID
-
+	return resp.ID
 }
 
 func addVisionMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message, config *config.Config) openai.ChatCompletionMessage {
