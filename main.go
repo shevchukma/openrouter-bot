@@ -89,6 +89,16 @@ func main() {
 		log.Fatalf("Failed to delete webhook: %v", err)
 	}
 
+	// Глобальные команды — видны ВЕЗДЕ: в BotFather, при добавлении в группу и т.д.
+	globalCommands := []tgbotapi.BotCommand{
+		{Command: "pirdun", Description: lang.Translate("description.pirdun", conf.Lang)},
+	}
+
+	_, err = bot.Request(tgbotapi.NewSetMyCommands(globalCommands...))
+	if err != nil {
+		log.Printf("Не удалось установить глобальные команды: %v", err)
+	}
+
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
@@ -98,16 +108,6 @@ func main() {
 	client := openai.NewClientWithConfig(clientOptions)
 
 	userManager := user.NewUserManager("logs")
-
-	// Глобальные команды (видны всем и везде, включая BotFather)
-	globalCommands := []tgbotapi.BotCommand{
-		Command: "pirdun", Description: lang.Translate("description.pirdun", conf.Lang)},
-	}
-
-	_, err = bot.Request(tgbotapi.NewSetMyCommands(globalCommands...))
-	if err != nil {
-		log.Printf("Не удалось установить глобальные команды: %v", err)
-	}
 
 	for update := range updates {
 		if update.Message == nil {
