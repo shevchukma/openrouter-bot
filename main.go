@@ -105,15 +105,15 @@ func main() {
 		}
 	
 		// Пропускаем все служебные сообщения Telegram
-		if update.Message.NewChatMembers != nil ||	  // кто-то добавлен (включая бота)
-		   update.Message.LeftChatMember != nil ||	  // кто-то вышел
-		   update.Message.GroupChatCreated ||		   // создан групповой чат
-		   update.Message.SupergroupChatCreated ||	  // создан супергрупповой
-		   update.Message.ChannelChatCreated ||		 // создан канал
-		   update.Message.MigrateToChatID != 0 ||	   // миграция
-		   update.Message.MigrateFromChatID != 0 {
-			continue  // просто игнорируем
-		}
+		if update.Message.NewChatMembers != nil ||             // кто-то добавлен (включая бота)
+			   update.Message.LeftChatMember != nil ||         // кто-то вышел
+			   update.Message.GroupChatCreated ||              // создан обычный групповой чат
+			   update.Message.SuperGroupChatCreated ||         // ← ВОТ ТАК ПРАВИЛЬНО! (с большой G)
+			   update.Message.ChannelChatCreated ||            // создан канал
+			   update.Message.MigrateToChatID != 0 ||          // миграция в супергруппу
+			   update.Message.MigrateFromChatID != 0 {
+			    continue
+			}
 	
 		userID := update.Message.From.ID
 		userStats := userManager.GetUser(userID, update.SentFrom().UserName, conf)
