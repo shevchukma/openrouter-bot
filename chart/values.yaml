@@ -1,7 +1,7 @@
 # Deployment
 replicaCount: 1
 image:
-  img: "lifailon/openrouter-bot"
+  img: "velikoross/openrouter-bot"
   tag: "latest"
 resources:
   requests:

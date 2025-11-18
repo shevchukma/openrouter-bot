@@ -1,7 +1,7 @@
-Helm chart for installing the [OpenRouter Bot](https://github.com/Lifailon/openrouter-bot) in Kubernetes cluster.
+Helm chart for installing the [OpenRouter Bot](https://github.com/shevchukma/openrouter-bot) in Kubernetes cluster.
 
 ```bash
-helm repo add openrouter-bot https://lifailon.github.io/openrouter-bot
+helm repo add openrouter-bot https://shevchukma.github.io/openrouter-bot
 
 helm upgrade --install openrouter-bot openrouter-bot/openrouter-bot \
     --set API_KEY="sk-or-v1-XXX" \

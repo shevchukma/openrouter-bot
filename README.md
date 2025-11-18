@@ -35,7 +35,7 @@ This project allows you to launch your Telegram bot in a few minutes to communic
 
 ## Installation
 
-To run locally on Windows or Linux system, download the pre-built binary (without dependencies) from the [releases](https://github.com/Lifailon/openrouter-bot/releases) page.
+To run locally on Windows or Linux system, download the pre-built binary (without dependencies) from the [releases](https://github.com/shevchukma/openrouter-bot/releases) page.
 
 ### Running in Docker
 
@@ -65,15 +65,15 @@ GUEST_BUDGET=0
 LANG=EN
 ```
 
-The list of all available parameters is listed in the [.env.example](https://github.com/Lifailon/openrouter-bot/blob/main/.env.example) file
+The list of all available parameters is listed in the [.env.example](https://github.com/shevchukma/openrouter-bot/blob/main/.env.example) file
 
-- Run a container using the image from [Docker Hub](https://hub.docker.com/r/lifailon/openrouter-bot):
+- Run a container using the image from [Docker Hub](https://hub.docker.com/r/shevchukma/openrouter-bot):
 
 ```bash
 docker run -d --name OpenRouter-Bot \
     -v ./.env:/openrouter-bot/.env \
     --restart unless-stopped \
-    lifailon/openrouter-bot:latest
+    velikoross/openrouter-bot:latest
 ```
 
 The image is build for `amd64` and `arm64` (Raspberry Pi) platforms using [docker buildx](https://github.com/docker/buildx).
@@ -81,7 +81,7 @@ The image is build for `amd64` and `arm64` (Raspberry Pi) platforms using [docke
 ## Build
 
 ```bash
-git clone https://github.com/Lifailon/openrouter-bot
+git clone https://github.com/shevchukma/openrouter-bot
 cd openrouter-bot
 docker-compose up -d --build
 ```
