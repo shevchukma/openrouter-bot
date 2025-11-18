@@ -13,53 +13,55 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sashabaranov/go-openai"
 )
-// getBotCommands — формирует список команд в меню в зависимости от роли
+// === НОВАЯ ФУНКЦИЯ: определяем роль пользователя ===
+func getUserRole(userID int64, conf *config.Config) string {
+	userIDStr := strconv.FormatInt(userID, 10)
+
+	for _, adminID := range conf.AdminChatIDs {
+		if userIDStr == fmt.Sprintf("%d", adminID) {
+			return "admin"
+		}
+	}
+	for _, allowedID := range conf.AllowedUserChatIDs {
+		if userIDStr == fmt.Sprintf("%d", allowedID) {
+			return "user"
+		}
+	}
+	return "guest"
+}
+
+// === ДИНАМИЧЕСКОЕ МЕНЮ КОМАНД ===
 func getBotCommands(userID int64, conf *config.Config) []tgbotapi.BotCommand {
-    userIDStr := strconv.FormatInt(userID, 10)
-    isAdmin := false
-    isAllowed := false
+	role := getUserRole(userID, conf)
 
-    for _, adminID := range conf.AdminChatIDs {
-        if userIDStr == fmt.Sprintf("%d", adminID) {
-            isAdmin = true
-            break
-        }
-    }
-    if !isAdmin {
-        for _, allowedID := range conf.AllowedUserChatIDs {
-            if userIDStr == fmt.Sprintf("%d", allowedID) {
-                isAllowed = true
-                break
-            }
-        }
-    }
+	if role == "admin" {
+		return []tgbotapi.BotCommand{
+			{Command: "start", Description: lang.Translate("description.start", conf.Lang)},
+			{Command: "help", Description: lang.Translate("description.help", conf.Lang)},
+			{Command: "get_models", Description: lang.Translate("description.getModels", conf.Lang)},
+			{Command: "set_model", Description: lang.Translate("description.setModel", conf.Lang)},
+			{Command: "reset", Description: lang.Translate("description.reset", conf.Lang)},
+			{Command: "stats", Description: lang.Translate("description.stats", conf.Lang)},
+			{Command: "stop", Description: lang.Translate("description.stop", conf.Lang)},
+			{Command: "пирдун", Description: "Задать вопрос модели"},
+		}
+	}
 
-    if isAdmin {
-        return []tgbotapi.BotCommand{
-            {Command: "start", Description: lang.Translate("description.start", conf.Lang)},
-            {Command: "help", Description: lang.Translate("description.help", conf.Lang)},
-            {Command: "get_models", Description: lang.Translate("description.getModels", conf.Lang)},
-            {Command: "set_model", Description: lang.Translate("description.setModel", conf.Lang)},
-            {Command: "reset", Description: lang.Translate("description.reset", conf.Lang)},
-            {Command: "stats", Description: lang.Translate("description.stats", conf.Lang)},
-            {Command: "stop", Description: lang.Translate("description.stop", conf.Lang)},
-            {Command: "пирдун", Description: "Задать вопрос модели"},
-        }
-    }
+	if role == "user" {
+		return []tgbotapi.BotCommand{
+			{Command: "start", Description: lang.Translate("description.start", conf.Lang)},
+			{Command: "help", Description: "Помощь по доступным командам"},
+			{Command: "reset", Description: "Очистить историю разговора"},
+			{Command: "stop", Description: "Остановить генерацию"},
+			{Command: "пирдун", Description: "Задать вопрос модели"},
+		}
+	}
 
-    if isAllowed {
-        return []tgbotapi.BotCommand{
-            {Command: "start", Description: lang.Translate("description.start", conf.Lang)},
-            {Command: "пирдун", Description: "Задать вопрос модели"},
-            {Command: "reset", Description: "Очистить историю разговора"},
-        }
-    }
-
-    // Гости — только базовые
-    return []tgbotapi.BotCommand{
-        {Command: "start", Description: lang.Translate("description.start", conf.Lang)},
-        {Command: "пирдун", Description: "Задать вопрос модели"},
-    }
+	// guest — только минимум
+	return []tgbotapi.BotCommand{
+		{Command: "start", Description: lang.Translate("description.start", conf.Lang)},
+		{Command: "пирдун", Description: "Задать вопрос модели"},
+	}
 }
 func main() {
 	err := lang.LoadTranslations("./lang/")
@@ -117,76 +119,104 @@ func main() {
 		if update.Message == nil {
 			continue
 		}
-
-		userStats := userManager.GetUser(update.SentFrom().ID, update.SentFrom().UserName, conf)
-
-		// === ДИНАМИЧЕСКИ УСТАНАВЛИВАЕМ МЕНЮ КОМАНД ДЛЯ КАЖДОГО ПОЛЬЗОВАТЕЛЯ ===
-		go func(userID int64) {
-			commands := getBotCommands(userID, conf)
-			bot.Request(tgbotapi.NewSetMyCommands(commands...))
-		}(update.Message.From.ID)
-
-		if update.Message.IsCommand() {
-			cmd := update.Message.Command()
-
-			// Проверяем, является ли пользователь админом
-			isAdmin := false
-			userIDStr := strconv.FormatInt(update.Message.From.ID, 10)
-			for _, adminID := range conf.AdminChatIDs {
-				if userIDStr == fmt.Sprintf("%d", adminID) {
-					isAdmin = true
-					break
-				}
-			}
-
-			// Разрешённые команды для всех
-			if cmd == "start" || cmd == "пирдун" {
-				// Эти команды работают у всех
-			} else {
-				// Все остальные команды — ТОЛЬКО для админов
-				if !isAdmin {
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Эта команда доступна только администраторам бота.")
-					msg.ParseMode = "HTML"
+	
+		userID := update.Message.From.ID
+		userStats := userManager.GetUser(userID, update.SentFrom().UserName, conf)
+		role := getUserRole(userID, conf)
+	
+		// Устанавливаем персональное меню команд (только при первом сообщении — можно оптимизировать, но и так ок)
+		go bot.Request(tgbotapi.NewSetMyCommands(getBotCommands(userID, conf)...))
+	
+		// === Если гость и не /start и не /пирдун и не обычное сообщение — блокируем ===
+		if role == "guest" {
+			if update.Message.IsCommand() {
+				cmd := update.Message.Command()
+				if cmd != "start" && cmd != "пирдун" {
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "У вас нет доступа к командам. Обратитесь к администратору.")
 					bot.Send(msg)
 					continue
 				}
 			}
-
+		}
+	
+		if update.Message.IsCommand() {
+			cmd := update.Message.Command()
+		
+			// Команды, доступные только админам
+			adminOnlyCommands := map[string]bool{
+				"get_models": true,
+				"set_model":  true,
+				"stats":	  true,
+			}
+		
+			if adminOnlyCommands[cmd] && role != "admin" {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Эта команда доступна только администраторам.")
+				bot.Send(msg)
+				continue
+			}
+		
 			switch cmd {
-
+			
 			case "start":
-				msgText := lang.Translate("commands.start", conf.Lang) + lang.Translate("commands.help", conf.Lang) + lang.Translate("commands.start_end", conf.Lang)
+				msgText := lang.Translate("commands.start", conf.Lang)
+				if role == "user" || role == "admin" {
+					msgText += "\n\nДоступные команды:\n/start — начать\n/пирдун <вопрос> — задать вопрос\n/reset — очистить историю\n/stop — остановить генерацию\n/help — помощь"
+				}
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
 				msg.ParseMode = "HTML"
 				bot.Send(msg)
-
+			
+			case "help":
+				if role == "guest" {
+					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "У вас ограниченный доступ."))
+					continue
+				}
+				helpText := "<b>Доступные команды:</b>\n\n" +
+					"/пирдун &lt;вопрос&gt; — задать вопрос модели\n" +
+					"/reset — очистить историю разговора\n" +
+					"/stop — прервать текущую генерацию\n" +
+					"/help — эта справка"
+				if role == "admin" {
+					helpText = lang.Translate("commands.help", conf.Lang) // полный хелп для админа
+				}
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, helpText)
+				msg.ParseMode = "HTML"
+				bot.Send(msg)
+			
+			case "reset":
+				userStats.ClearHistory()
+				userStats.SystemPrompt = conf.SystemPrompt // на всякий случай сбрасываем и промпт
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "История очищена ✅")
+				bot.Send(msg)
+			
+			case "stop":
+				if userStats.CurrentStream != nil {
+					userStats.CurrentStream.Close()
+					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Генерация остановлена."))
+				} else {
+					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Нечего останавливать."))
+				}
+			
 			case "пирдун":
 				args := update.Message.CommandArguments()
 				if args == "" {
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Использование: /пирдун <текст запроса>")
-					bot.Send(msg)
+					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Использование: /пирдун <текст запроса>"))
 					continue
 				}
 				fakeMsg := *update.Message
 				fakeMsg.Text = args
-				go func(userStats *user.UsageTracker) {
+				go func() {
 					if userStats.HaveAccess(conf) {
 						responseID := api.HandleChatGPTStreamResponse(bot, client, &fakeMsg, conf, userStats)
 						if conf.Model.Type == "openrouter" {
 							userStats.GetUsageFromApi(responseID, conf)
 						}
 					} else {
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("budget_out", conf.Lang))
-						bot.Send(msg)
+						bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("budget_out", conf.Lang)))
 					}
-				}(userStats)
-
-			// === ВСЕ ОСТАЛЬНЫЕ КОМАНДЫ — ТОЛЬКО ДЛЯ АДМИНОВ ===
-			case "help":
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.help", conf.Lang))
-				msg.ParseMode = "HTML"
-				bot.Send(msg)
-
+				}()
+				
+			// === Админские команды (get_models, set_model, stats) ===
 			case "get_models":
 				models, _ := api.GetFreeModels()
 				text := lang.Translate("commands.getModels", conf.Lang) + models
@@ -212,52 +242,6 @@ func main() {
 					msg.Text = lang.Translate("commands.setModel", conf.Lang) + " `" + conf.Model.ModelName + "`"
 				}
 				bot.Send(msg)
-
-				case "reset":
-					args := update.Message.CommandArguments()
-				
-					// Если есть аргументы — это может быть "system" или кастомный промпт → только админы
-					if args != "" {
-						if !isAdmin {
-							msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Изменение системного промпта доступно только администраторам.")
-							bot.Send(msg)
-							continue
-						}
-					
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
-						if args == "system" {
-							userStats.SystemPrompt = conf.SystemPrompt
-							msg.Text = lang.Translate("commands.reset_system", conf.Lang)
-						} else {
-							userStats.SystemPrompt = args
-							msg.Text = lang.Translate("commands.reset_prompt", conf.Lang) + args + "."
-						}
-						bot.Send(msg)
-						break
-					}
-				
-					// Если аргументов нет — просто очистка истории
-					// Разрешаем это всем из AllowedUserChatIDs + админам
-					isAllowedUser := false
-					userIDStr := strconv.FormatInt(update.Message.From.ID, 10)
-					for _, allowedID := range conf.AllowedUserChatIDs {
-						if userIDStr == fmt.Sprintf("%d", allowedID) {
-							isAllowedUser = true
-							break
-						}
-					}
-				
-					if !isAdmin && !isAllowedUser {
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Очистка истории доступна только платным пользователям и администраторам.")
-						bot.Send(msg)
-						break
-					}
-				
-					// Выполняем очистку
-					userStats.ClearHistory()
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.reset", conf.Lang))
-					bot.Send(msg)
-
 			case "stats":
 				userStats.CheckHistory(conf.MaxHistorySize, conf.MaxHistoryTime)
 				countedUsage := strconv.FormatFloat(userStats.GetCurrentCost(conf.BudgetPeriod), 'f', 6, 64)
@@ -269,30 +253,18 @@ func main() {
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMessage)
 				msg.ParseMode = "HTML"
 				bot.Send(msg)
-
-			case "stop":
-				if userStats.CurrentStream != nil {
-					userStats.CurrentStream.Close()
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.stop", conf.Lang))
-					bot.Send(msg)
-				} else {
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.stop_err", conf.Lang))
-					bot.Send(msg)
-				}
-			}
 		} else {
-			// Обычные сообщения (не команды) — работают у всех, кто имеет доступ по бюджету
-			go func(userStats *user.UsageTracker) {
+			// Обычные сообщения — только если есть доступ по бюджету
+			go func() {
 				if userStats.HaveAccess(conf) {
 					responseID := api.HandleChatGPTStreamResponse(bot, client, update.Message, conf, userStats)
 					if conf.Model.Type == "openrouter" {
 						userStats.GetUsageFromApi(responseID, conf)
 					}
 				} else {
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("budget_out", conf.Lang))
-					bot.Send(msg)
+					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("budget_out", conf.Lang)))
 				}
-			}(userStats)
+			}()
 		}
 	}
 
