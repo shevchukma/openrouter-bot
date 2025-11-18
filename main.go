@@ -13,7 +13,37 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sashabaranov/go-openai"
 )
+// getBotCommands — формирует список команд в меню в зависимости от роли
+func getBotCommands(userID int64, conf *config.Config) []tgbotapi.BotCommand {
+    userIDStr := strconv.FormatInt(userID, 10)
+    isAdmin := false
+    for _, adminID := range conf.AdminChatIDs {
+        if userIDStr == fmt.Sprintf("%d", adminID) {
+            isAdmin = true
+            break
+        }
+    }
 
+    if isAdmin {
+        // Админ видит ВСЁ
+        return []tgbotapi.BotCommand{
+            {Command: "start", Description: lang.Translate("description.start", conf.Lang)},
+            {Command: "help", Description: lang.Translate("description.help", conf.Lang)},
+            {Command: "get_models", Description: lang.Translate("description.getModels", conf.Lang)},
+            {Command: "set_model", Description: lang.Translate("description.setModel", conf.Lang)},
+            {Command: "reset", Description: lang.Translate("description.reset", conf.Lang)},
+            {Command: "stats", Description: lang.Translate("description.stats", conf.Lang)},
+            {Command: "stop", Description: lang.Translate("description.stop", conf.Lang)},
+            {Command: "пирдун", Description: "Задать вопрос модели"},
+        }
+    }
+
+    // Все остальные — только start и пирдун
+    return []tgbotapi.BotCommand{
+        {Command: "start", Description: lang.Translate("description.start", conf.Lang)},
+        {Command: "пирдун", Description: "Задать вопрос модели"},
+    }
+}
 func main() {
 	err := lang.LoadTranslations("./lang/")
 	if err != nil {
@@ -55,10 +85,10 @@ func main() {
 		{Command: "stats", Description: lang.Translate("description.stats", conf.Lang)},
 		{Command: "stop", Description: lang.Translate("description.stop", conf.Lang)},
 	}
-	_, err = bot.Request(tgbotapi.NewSetMyCommands(commands...))
-	if err != nil {
-		log.Fatalf("Failed to set bot commands: %v", err)
-	}
+	//_, err = bot.Request(tgbotapi.NewSetMyCommands(commands...))
+	//if err != nil {
+	//	log.Fatalf("Failed to set bot commands: %v", err)
+	//}
 
 	clientOptions := openai.DefaultConfig(conf.OpenAIApiKey)
 	clientOptions.BaseURL = conf.OpenAIBaseURL
@@ -70,34 +100,83 @@ func main() {
 		if update.Message == nil {
 			continue
 		}
+
 		userStats := userManager.GetUser(update.SentFrom().ID, update.SentFrom().UserName, conf)
-		//userStats.AddCost(0.0)
+
+		// === ДИНАМИЧЕСКИ УСТАНАВЛИВАЕМ МЕНЮ КОМАНД ДЛЯ КАЖДОГО ПОЛЬЗОВАТЕЛЯ ===
+		go func(userID int64) {
+			commands := getBotCommands(userID, conf)
+			bot.Request(tgbotapi.NewSetMyCommands(commands...))
+		}(update.Message.From.ID)
+
 		if update.Message.IsCommand() {
-			switch update.Message.Command() {
+			cmd := update.Message.Command()
+
+			// Проверяем, является ли пользователь админом
+			isAdmin := false
+			userIDStr := strconv.FormatInt(update.Message.From.ID, 10)
+			for _, adminID := range conf.AdminChatIDs {
+				if userIDStr == fmt.Sprintf("%d", adminID) {
+					isAdmin = true
+					break
+				}
+			}
+
+			// Разрешённые команды для всех
+			if cmd == "start" || cmd == "пирдун" {
+				// Эти команды работают у всех
+			} else {
+				// Все остальные команды — ТОЛЬКО для админов
+				if !isAdmin {
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Эта команда доступна только администраторам бота.")
+					msg.ParseMode = "HTML"
+					bot.Send(msg)
+					continue
+				}
+			}
+
+			switch cmd {
+
 			case "start":
 				msgText := lang.Translate("commands.start", conf.Lang) + lang.Translate("commands.help", conf.Lang) + lang.Translate("commands.start_end", conf.Lang)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
 				msg.ParseMode = "HTML"
 				bot.Send(msg)
+
+			case "пирдун":
+				args := update.Message.CommandArguments()
+				if args == "" {
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Использование: /пирдун <текст запроса>")
+					bot.Send(msg)
+					continue
+				}
+				fakeMsg := *update.Message
+				fakeMsg.Text = args
+				go func(userStats *user.UsageTracker) {
+					if userStats.HaveAccess(conf) {
+						responseID := api.HandleChatGPTStreamResponse(bot, client, &fakeMsg, conf, userStats)
+						if conf.Model.Type == "openrouter" {
+							userStats.GetUsageFromApi(responseID, conf)
+						}
+					} else {
+						msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("budget_out", conf.Lang))
+						bot.Send(msg)
+					}
+				}(userStats)
+
+			// === ВСЕ ОСТАЛЬНЫЕ КОМАНДЫ — ТОЛЬКО ДЛЯ АДМИНОВ ===
 			case "help":
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.help", conf.Lang))
 				msg.ParseMode = "HTML"
 				bot.Send(msg)
+
 			case "get_models":
 				models, _ := api.GetFreeModels()
-				if err != nil {
-					fmt.Printf("Error: %v\n", err)
-					return
-				}
-				// fmt.Println(models)
 				text := lang.Translate("commands.getModels", conf.Lang) + models
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 				msg.ParseMode = tgbotapi.ModeMarkdown
-				_, err := bot.Send(msg)
-				if err != nil {
-					fmt.Printf("Error: %v\n", err)
-					return
-				}
+				bot.Send(msg)
+
 			case "set_model":
 				args := update.Message.CommandArguments()
 				argsArr := strings.Split(args, " ")
@@ -116,6 +195,7 @@ func main() {
 					msg.Text = lang.Translate("commands.setModel", conf.Lang) + " `" + conf.Model.ModelName + "`"
 				}
 				bot.Send(msg)
+
 			case "reset":
 				args := update.Message.CommandArguments()
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
@@ -130,6 +210,7 @@ func main() {
 					msg.Text = lang.Translate("commands.reset", conf.Lang)
 				}
 				bot.Send(msg)
+
 			case "stats":
 				userStats.CheckHistory(conf.MaxHistorySize, conf.MaxHistoryTime)
 				countedUsage := strconv.FormatFloat(userStats.GetCurrentCost(conf.BudgetPeriod), 'f', 6, 64)
@@ -137,17 +218,7 @@ func main() {
 				monthUsage := strconv.FormatFloat(userStats.GetCurrentCost("monthly"), 'f', 6, 64)
 				totalUsage := strconv.FormatFloat(userStats.GetCurrentCost("total"), 'f', 6, 64)
 				messagesCount := strconv.Itoa(len(userStats.GetMessages()))
-
-				var statsMessage string
-				if userStats.CanViewStats(conf) {
-					statsMessage = fmt.Sprintf(
-						lang.Translate("commands.stats", conf.Lang),
-						countedUsage, todayUsage, monthUsage, totalUsage, messagesCount)
-				} else {
-					statsMessage = fmt.Sprintf(
-						lang.Translate("commands.stats_min", conf.Lang), messagesCount)
-				}
-
+				statsMessage := fmt.Sprintf(lang.Translate("commands.stats", conf.Lang), countedUsage, todayUsage, monthUsage, totalUsage, messagesCount)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMessage)
 				msg.ParseMode = "HTML"
 				bot.Send(msg)
@@ -161,35 +232,10 @@ func main() {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.stop_err", conf.Lang))
 					bot.Send(msg)
 				}
-			case "пирдун":
-				args := update.Message.CommandArguments()
-			
-				if args == "" {
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Использование: /пирдун <текст запроса>")
-					bot.Send(msg)
-					continue
-				}
-			
-				// Создаём копию update.Message, чтобы подменить текст
-				fakeMsg := *update.Message
-				fakeMsg.Text = args
-			
-				go func(userStats *user.UsageTracker) {
-					if userStats.HaveAccess(conf) {
-						responseID := api.HandleChatGPTStreamResponse(bot, client, &fakeMsg, conf, userStats)
-						if conf.Model.Type == "openrouter" {
-							userStats.GetUsageFromApi(responseID, conf)
-						}
-					} else {
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("budget_out", conf.Lang))
-						bot.Send(msg)
-					}
-				}(userStats)
-
 			}
 		} else {
+			// Обычные сообщения (не команды) — работают у всех, кто имеет доступ по бюджету
 			go func(userStats *user.UsageTracker) {
-				// Handle user message
 				if userStats.HaveAccess(conf) {
 					responseID := api.HandleChatGPTStreamResponse(bot, client, update.Message, conf, userStats)
 					if conf.Model.Type == "openrouter" {
@@ -197,12 +243,8 @@ func main() {
 					}
 				} else {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("budget_out", conf.Lang))
-					_, err := bot.Send(msg)
-					if err != nil {
-						log.Println(err)
-					}
+					bot.Send(msg)
 				}
-
 			}(userStats)
 		}
 	}
