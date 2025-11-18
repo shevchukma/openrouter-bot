@@ -105,7 +105,7 @@ func main() {
 		}
 	
 		// Пропускаем все служебные сообщения Telegram
-		if update.Message.NewChatMembers != nil ||             // кто-то добавлен (включая бота)
+		if update.Message.NewChatMembers != nil ||         // кто-то добавлен (включая бота)
 		   update.Message.LeftChatMember != nil ||         // кто-то вышел
 		   update.Message.GroupChatCreated ||              // создан обычный групповой чат
 		   update.Message.SuperGroupChatCreated ||         // создан супергрупповой
