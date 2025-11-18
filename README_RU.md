@@ -35,7 +35,7 @@
 
 ## Установка
 
-Для локального запуска в системе Windows или Linux, загрузите предварительно собранный бинарный файл (без зависимостей) на странице [релизов](https://github.com/Lifailon/openrouter-bot/releases).
+Для локального запуска в системе Windows или Linux, загрузите предварительно собранный бинарный файл (без зависимостей) на странице [релизов](https://github.com/shevchukma/openrouter-bot/releases).
 
 ### Запуск в Docker
 
@@ -65,15 +65,15 @@ GUEST_BUDGET=0
 LANG=RU
 ```
 
-Список всех доступных параметров приведен в файле [.env.example](https://github.com/Lifailon/openrouter-bot/blob/main/.env.example)
+Список всех доступных параметров приведен в файле [.env.example](https://github.com/shevchukma/openrouter-bot/blob/main/.env.example)
 
-- Запустите контейнер, используя образ из [Docker Hub](https://hub.docker.com/r/lifailon/openrouter-bot):
+- Запустите контейнер, используя образ из [Docker Hub](https://hub.docker.com/r/shevchukma/openrouter-bot):
 
 ```bash
 docker run -d --name OpenRouter-Bot \
     -v ./.env:/openrouter-bot/.env \
     --restart unless-stopped \
-    lifailon/openrouter-bot:latest
+    velikoross/openrouter-bot:latest
 ```
 
 Образ собран для платформ `amd64` и `aarch64` (Raspberry Pi) с использованием [docker buildx](https://github.com/docker/buildx).
@@ -81,7 +81,7 @@ docker run -d --name OpenRouter-Bot \
 ## Сборка
 
 ```bash
-git clone https://github.com/Lifailon/openrouter-bot
+git clone https://github.com/shevchukma/openrouter-bot
 cd openrouter-bot
 docker-compose up -d --build
 ```

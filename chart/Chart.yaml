@@ -4,16 +4,16 @@ description: OpenRouter in Telegram
 version: 0.2.0
 appVersion: "0.5.0"
 
-icon: https://raw.githubusercontent.com/Lifailon/openrouter-bot/main/img/logo.png
+icon: https://raw.githubusercontent.com/shevchukma/openrouter-bot/main/img/logo.png
 
-home: https://github.com/Lifailon/openrouter-bot
+home: https://github.com/shevchukma/openrouter-bot
 
 sources:
-  - https://github.com/Lifailon/openrouter-bot
+  - https://github.com/shevchukma/openrouter-bot
 
 maintainers:
-  - name: Lifailon
-    url: https://github.com/Lifailon
+  - name: shevchukma
+    url: https://github.com/shevchukma
 
 keywords:
   - telegram
