@@ -99,6 +99,16 @@ func main() {
 
 	userManager := user.NewUserManager("logs")
 
+	// Глобальные команды (видны всем и везде, включая BotFather)
+	globalCommands := []tgbotapi.BotCommand{
+		Command: "pirdun", Description: lang.Translate("description.pirdun", conf.Lang)},
+	}
+
+	_, err = bot.Request(tgbotapi.NewSetMyCommands(globalCommands...))
+	if err != nil {
+		log.Printf("Не удалось установить глобальные команды: %v", err)
+	}
+
 	for update := range updates {
 		if update.Message == nil {
 			continue
@@ -120,7 +130,12 @@ func main() {
 		role := getUserRole(userID, conf)
 
 		// Обновляем меню команд для пользователя
-		go bot.Request(tgbotapi.NewSetMyCommands(getBotCommands(userID, conf)...))
+		//go bot.Request(tgbotapi.NewSetMyCommands(getBotCommands(userID, conf)...))
+		// Обновляем меню только в личных чатах
+
+		if update.Message.Chat.Type == "private" {
+			go bot.Request(tgbotapi.NewSetMyCommands(getBotCommands(userID, conf)...))
+		}
 
 		// Гости могут только /start, /pirdun и обычные сообщения
 		if role == "guest" && update.Message.IsCommand() {
