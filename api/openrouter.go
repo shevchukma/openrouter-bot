@@ -90,37 +90,6 @@ func HandleChatGPTStreamResponse(bot *tgbotapi.BotAPI, client *openai.Client, me
 	loadMessage := lang.Translate("loadText", conf.Lang)
 	errorMessage := lang.Translate("errorText", conf.Lang)
 
-	processingMsg := tgbotapi.NewMessage(message.Chat.ID, loadMessage)
-	sentMsg, err := bot.Send(processingMsg)
-	if err != nil {
-		log.Printf("Failed to send processing message: %v", err)
-		return ""
-	}
-	lastMessageID := sentMsg.MessageID
-
-	// Goroutine for animation points
-	stopAnimation := make(chan bool)
-	go func() {
-		dots := []string{"", ".", "..", "...", "..", "."}
-		i := 0
-		for {
-			select {
-			case <-stopAnimation:
-				return
-			default:
-				text := fmt.Sprintf("%s%s", loadMessage, dots[i])
-				editMsg := tgbotapi.NewEditMessageText(message.Chat.ID, lastMessageID, text)
-				_, err := bot.Send(editMsg)
-				if err != nil {
-					log.Printf("Failed to update processing message: %v", err)
-				}
-
-				i = (i + 1) % len(dots)
-				time.Sleep(500 * time.Millisecond)
-			}
-		}
-	}()
-
 	messages := []openai.ChatCompletionMessage{
 		{
 			Role:    openai.ChatMessageRoleSystem,
@@ -152,7 +121,7 @@ func HandleChatGPTStreamResponse(bot *tgbotapi.BotAPI, client *openai.Client, me
 		TopP:             float32(config.Model.TopP),
 		MaxTokens:        config.MaxTokens,
 		Messages:         messages,
-		Stream:           true,
+		Stream:           false,
 	}
 
 	// Error handling and sending a response message
@@ -172,47 +141,23 @@ func HandleChatGPTStreamResponse(bot *tgbotapi.BotAPI, client *openai.Client, me
 	responseID := ""
 	log.Printf("User: " + user.UserName + " Stream response. ")
 
-	for {
-		response, err := stream.Recv()
-		if responseID == "" {
-			responseID = response.ID
-		}
-		if errors.Is(err, io.EOF) {
-			fmt.Println("\nStream finished, response ID:", responseID)
-			user.AddMessage(openai.ChatMessageRoleUser, message.Text)
-			user.AddMessage(openai.ChatMessageRoleAssistant, messageText)
-			editMsg := tgbotapi.NewEditMessageText(message.Chat.ID, lastMessageID, messageText)
-			editMsg.ParseMode = tgbotapi.ModeMarkdown
-			_, err := bot.Send(editMsg)
-			if err != nil {
-				log.Printf("Failed to edit message: %v", err)
-			}
-			user.CurrentStream = nil
-			return responseID
-		}
+if err != nil {
+    msg := tgbotapi.NewMessage(message.Chat.ID, errorMessage)
+    bot.Send(msg)
+    return ""
+}
 
-		if err != nil {
-			fmt.Printf("\nStream error: %v\n", err)
-			msg := tgbotapi.NewMessage(message.Chat.ID, err.Error())
-			msg.ParseMode = tgbotapi.ModeMarkdown
-			bot.Send(msg)
-			user.CurrentStream = nil
-			return responseID
-		}
+answer := resp.Choices[0].Message.Content
+user.AddMessage(openai.ChatMessageRoleUser, message.Text)
+user.AddMessage(openai.ChatMessageRoleAssistant, answer)
 
-		if len(response.Choices) > 0 {
-			messageText += response.Choices[0].Delta.Content
-			editMsg := tgbotapi.NewEditMessageText(message.Chat.ID, lastMessageID, messageText)
-			editMsg.ParseMode = tgbotapi.ModeMarkdown
-			_, err := bot.Send(editMsg)
-			if err != nil {
-				continue
-			}
-		} else {
-			log.Printf("Received empty response choices")
-			continue
-		}
-	}
+msg := tgbotapi.NewMessage(message.Chat.ID, answer)
+msg.ParseMode = tgbotapi.ModeMarkdown
+
+bot.Send(msg)
+
+return resp.ID
+
 }
 
 func addVisionMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message, config *config.Config) openai.ChatCompletionMessage {
