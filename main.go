@@ -76,15 +76,15 @@ func main() {
 	updates := bot.GetUpdatesChan(u)
 
 	// Set bot commands
-	commands := []tgbotapi.BotCommand{
-		{Command: "start", Description: lang.Translate("description.start", conf.Lang)},
-		{Command: "help", Description: lang.Translate("description.help", conf.Lang)},
-		{Command: "get_models", Description: lang.Translate("description.getModels", conf.Lang)},
-		{Command: "set_model", Description: lang.Translate("description.setModel", conf.Lang)},
-		{Command: "reset", Description: lang.Translate("description.reset", conf.Lang)},
-		{Command: "stats", Description: lang.Translate("description.stats", conf.Lang)},
-		{Command: "stop", Description: lang.Translate("description.stop", conf.Lang)},
-	}
+	//commands := []tgbotapi.BotCommand{
+	//	{Command: "start", Description: lang.Translate("description.start", conf.Lang)},
+	//	{Command: "help", Description: lang.Translate("description.help", conf.Lang)},
+	//	{Command: "get_models", Description: lang.Translate("description.getModels", conf.Lang)},
+	//	{Command: "set_model", Description: lang.Translate("description.setModel", conf.Lang)},
+	//	{Command: "reset", Description: lang.Translate("description.reset", conf.Lang)},
+	//	{Command: "stats", Description: lang.Translate("description.stats", conf.Lang)},
+	//	{Command: "stop", Description: lang.Translate("description.stop", conf.Lang)},
+	//}
 	//_, err = bot.Request(tgbotapi.NewSetMyCommands(commands...))
 	//if err != nil {
 	//	log.Fatalf("Failed to set bot commands: %v", err)
