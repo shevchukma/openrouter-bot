@@ -74,30 +74,30 @@ func main() {
 		//userStats.AddCost(0.0)
 		if update.Message.IsCommand() {
 			switch update.Message.Command() {
-            case "пирдун":
-                args := update.Message.CommandArguments()
-            
-                if args == "" {
-                    msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Использование: /пирдун <текст запроса>")
-                    bot.Send(msg)
-                    continue
-                }
-            
-                // Создаём копию update.Message, чтобы подменить текст
-                fakeMsg := *update.Message
-                fakeMsg.Text = args
-            
-                go func(userStats *user.UsageTracker) {
-                    if userStats.HaveAccess(conf) {
-                        responseID := api.HandleChatGPTStreamResponse(bot, client, &fakeMsg, conf, userStats)
-                        if conf.Model.Type == "openrouter" {
-                            userStats.GetUsageFromApi(responseID, conf)
-                        }
-                    } else {
-                        msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("budget_out", conf.Lang))
-                        bot.Send(msg)
-                    }
-                }(userStats)
+			case "пирдун":
+				args := update.Message.CommandArguments()
+			
+				if args == "" {
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Использование: /пирдун <текст запроса>")
+					bot.Send(msg)
+					continue
+				}
+			
+				// Создаём копию update.Message, чтобы подменить текст
+				fakeMsg := *update.Message
+				fakeMsg.Text = args
+			
+				go func(userStats *user.UsageTracker) {
+					if userStats.HaveAccess(conf) {
+						responseID := api.HandleChatGPTStreamResponse(bot, client, &fakeMsg, conf, userStats)
+						if conf.Model.Type == "openrouter" {
+							userStats.GetUsageFromApi(responseID, conf)
+						}
+					} else {
+						msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("budget_out", conf.Lang))
+						bot.Send(msg)
+					}
+				}(userStats)
 			case "start":
 				msgText := lang.Translate("commands.start", conf.Lang) + lang.Translate("commands.help", conf.Lang) + lang.Translate("commands.start_end", conf.Lang)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
