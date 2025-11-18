@@ -141,10 +141,12 @@ func main() {
 				bot.Send(msg)
 
 			case "help":
-				helpText = lang.Translate("commands.helpuser", conf.Lang)
+				helpText := lang.Translate("commands.helpuser", conf.Lang)
+			
 				if role == "admin" {
 					helpText = lang.Translate("commands.help", conf.Lang)
 				}
+			
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, helpText)
 				msg.ParseMode = "HTML"
 				bot.Send(msg)

@@ -14,6 +14,7 @@
     "reset": "Message memory cleared.",
     "reset_system": "Message memory cleared. System prompt set to default.",
     "reset_prompt": "Message memory cleared. System prompt set to ",
+    "pirdun": "Usage: /pirdin <your request>",
     "stop": "Request stopped.",
     "stop_err": "There is no active request."
   },
