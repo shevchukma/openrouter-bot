@@ -17,15 +17,24 @@ import (
 func getBotCommands(userID int64, conf *config.Config) []tgbotapi.BotCommand {
     userIDStr := strconv.FormatInt(userID, 10)
     isAdmin := false
+    isAllowed := false
+
     for _, adminID := range conf.AdminChatIDs {
         if userIDStr == fmt.Sprintf("%d", adminID) {
             isAdmin = true
             break
         }
     }
+    if !isAdmin {
+        for _, allowedID := range conf.AllowedUserChatIDs {
+            if userIDStr == fmt.Sprintf("%d", allowedID) {
+                isAllowed = true
+                break
+            }
+        }
+    }
 
     if isAdmin {
-        // Админ видит ВСЁ
         return []tgbotapi.BotCommand{
             {Command: "start", Description: lang.Translate("description.start", conf.Lang)},
             {Command: "help", Description: lang.Translate("description.help", conf.Lang)},
@@ -38,7 +47,15 @@ func getBotCommands(userID int64, conf *config.Config) []tgbotapi.BotCommand {
         }
     }
 
-    // Все остальные — только start и пирдун
+    if isAllowed {
+        return []tgbotapi.BotCommand{
+            {Command: "start", Description: lang.Translate("description.start", conf.Lang)},
+            {Command: "пирдун", Description: "Задать вопрос модели"},
+            {Command: "reset", Description: "Очистить историю разговора"},
+        }
+    }
+
+    // Гости — только базовые
     return []tgbotapi.BotCommand{
         {Command: "start", Description: lang.Translate("description.start", conf.Lang)},
         {Command: "пирдун", Description: "Задать вопрос модели"},
@@ -196,20 +213,50 @@ func main() {
 				}
 				bot.Send(msg)
 
-			case "reset":
-				args := update.Message.CommandArguments()
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
-				if args == "system" {
-					userStats.SystemPrompt = conf.SystemPrompt
-					msg.Text = lang.Translate("commands.reset_system", conf.Lang)
-				} else if args != "" {
-					userStats.SystemPrompt = args
-					msg.Text = lang.Translate("commands.reset_prompt", conf.Lang) + args + "."
-				} else {
+				case "reset":
+					args := update.Message.CommandArguments()
+				
+					// Если есть аргументы — это может быть "system" или кастомный промпт → только админы
+					if args != "" {
+						if !isAdmin {
+							msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Изменение системного промпта доступно только администраторам.")
+							bot.Send(msg)
+							continue
+						}
+					
+						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
+						if args == "system" {
+							userStats.SystemPrompt = conf.SystemPrompt
+							msg.Text = lang.Translate("commands.reset_system", conf.Lang)
+						} else {
+							userStats.SystemPrompt = args
+							msg.Text = lang.Translate("commands.reset_prompt", conf.Lang) + args + "."
+						}
+						bot.Send(msg)
+						break
+					}
+				
+					// Если аргументов нет — просто очистка истории
+					// Разрешаем это всем из AllowedUserChatIDs + админам
+					isAllowedUser := false
+					userIDStr := strconv.FormatInt(update.Message.From.ID, 10)
+					for _, allowedID := range conf.AllowedUserChatIDs {
+						if userIDStr == fmt.Sprintf("%d", allowedID) {
+							isAllowedUser = true
+							break
+						}
+					}
+				
+					if !isAdmin && !isAllowedUser {
+						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Очистка истории доступна только платным пользователям и администраторам.")
+						bot.Send(msg)
+						break
+					}
+				
+					// Выполняем очистку
 					userStats.ClearHistory()
-					msg.Text = lang.Translate("commands.reset", conf.Lang)
-				}
-				bot.Send(msg)
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.reset", conf.Lang))
+					bot.Send(msg)
 
 			case "stats":
 				userStats.CheckHistory(conf.MaxHistorySize, conf.MaxHistoryTime)
