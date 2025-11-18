@@ -31,7 +31,7 @@ func getUserRole(userID int64, conf *config.Config) string {
 	return "guest"
 }
 
-// === Динамическое меню команд ===
+// === Динамическое меню команд (только для личных чатов) ===
 func getBotCommands(userID int64, conf *config.Config) []tgbotapi.BotCommand {
 	role := getUserRole(userID, conf)
 
@@ -51,17 +51,16 @@ func getBotCommands(userID int64, conf *config.Config) []tgbotapi.BotCommand {
 	if role == "user" {
 		return []tgbotapi.BotCommand{
 			{Command: "start", Description: lang.Translate("description.start", conf.Lang)},
-			{Command: "help", Description: lang.Translate("description.helpuser", conf.Lang)},
+			{Command: "help", Description:  lang.Translate("description.helpuser", conf.Lang)},
 			{Command: "reset", Description: lang.Translate("description.reset", conf.Lang)},
 			{Command: "stop", Description: lang.Translate("description.stop", conf.Lang)},
 			{Command: "pirdun", Description: lang.Translate("description.pirdun", conf.Lang)},
 		}
 	}
 
-	// guest
+	// guest — минимум
 	return []tgbotapi.BotCommand{
 		{Command: "start", Description: lang.Translate("description.start", conf.Lang)},
-		{Command: "help", Description: lang.Translate("description.helpuser", conf.Lang)},
 		{Command: "pirdun", Description: lang.Translate("description.pirdun", conf.Lang)},
 	}
 }
@@ -89,7 +88,7 @@ func main() {
 		log.Fatalf("Failed to delete webhook: %v", err)
 	}
 
-	// Глобальные команды — видны ВЕЗДЕ: в BotFather, при добавлении в группу и т.д.
+	// Глобальные команды — видны в BotFather и при добавлении в группу
 	globalCommands := []tgbotapi.BotCommand{
 		{Command: "pirdun", Description: lang.Translate("description.pirdun", conf.Lang)},
 	}
@@ -113,31 +112,28 @@ func main() {
 		if update.Message == nil {
 			continue
 		}
-	
-		// Пропускаем все служебные сообщения Telegram
-		if update.Message.NewChatMembers != nil ||         // кто-то добавлен (включая бота)
-		   update.Message.LeftChatMember != nil ||         // кто-то вышел
-		   update.Message.GroupChatCreated ||              // создан обычный групповой чат
-		   update.Message.SuperGroupChatCreated ||         // создан супергрупповой
-		   update.Message.ChannelChatCreated ||            // создан канал
-		   update.Message.MigrateToChatID != 0 ||          // миграция в супергруппу
-		   update.Message.MigrateFromChatID != 0 {
-		    continue
+
+		// Игнорируем служебные сообщения (добавление в группу и т.д.)
+		if update.Message.NewChatMembers != nil ||
+			update.Message.LeftChatMember != nil ||
+			update.Message.GroupChatCreated ||
+			update.Message.SuperGroupChatCreated ||
+			update.Message.ChannelChatCreated ||
+			update.Message.MigrateToChatID != 0 ||
+			update.Message.MigrateFromChatID != 0 {
+			continue
 		}
-	
+
 		userID := update.Message.From.ID
 		userStats := userManager.GetUser(userID, update.SentFrom().UserName, conf)
 		role := getUserRole(userID, conf)
 
-		// Обновляем меню команд для пользователя
-		//go bot.Request(tgbotapi.NewSetMyCommands(getBotCommands(userID, conf)...))
-		// Обновляем меню только в личных чатах
-
+		// Персональное меню команд только в личных чатах
 		if update.Message.Chat.Type == "private" {
 			go bot.Request(tgbotapi.NewSetMyCommands(getBotCommands(userID, conf)...))
 		}
 
-		// Гости могут только /start, /pirdun и обычные сообщения
+		// Гости не могут использовать команды, кроме start и pirdun
 		if role == "guest" && update.Message.IsCommand() {
 			cmd := update.Message.Command()
 			if cmd != "start" && cmd != "pirdun" {
@@ -150,7 +146,7 @@ func main() {
 		if update.Message.IsCommand() {
 			cmd := update.Message.Command()
 
-			// Только админы могут использовать эти команды
+			// Админские команды
 			if cmd == "get_models" || cmd == "set_model" || cmd == "stats" {
 				if role != "admin" {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Эта команда доступна только администраторам.")
@@ -168,11 +164,9 @@ func main() {
 
 			case "help":
 				helpText := lang.Translate("commands.helpuser", conf.Lang)
-			
 				if role == "admin" {
 					helpText = lang.Translate("commands.help", conf.Lang)
 				}
-			
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, helpText)
 				msg.ParseMode = "HTML"
 				bot.Send(msg)
@@ -193,7 +187,7 @@ func main() {
 			case "pirdun":
 				args := update.Message.CommandArguments()
 				if args == "" {
-					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, lang.Translate("commands.pirdun", conf.Lang)))
+					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Использование: /pirdun <ваш запрос>"))
 					continue
 				}
 				fakeMsg := *update.Message
@@ -210,7 +204,7 @@ func main() {
 				}()
 
 			case "get_models", "set_model", "stats":
-				// Эти команды уже проверены выше на роль admin — просто выполняем оригинальный код
+				// Эти команды уже проверены на admin выше
 				switch cmd {
 				case "get_models":
 					models, _ := api.GetFreeModels()
@@ -250,12 +244,9 @@ func main() {
 					msg.ParseMode = "HTML"
 					bot.Send(msg)
 				}
-
-			default:
-				// Неизвестная команда — ничего не делаем
 			}
 		} else {
-			// Обычное сообщение (не команда)
+			// Обычные сообщения
 			go func() {
 				if userStats.HaveAccess(conf) {
 					responseID := api.HandleChatGPTStreamResponse(bot, client, update.Message, conf, userStats)
