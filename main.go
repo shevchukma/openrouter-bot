@@ -114,20 +114,21 @@ func main() {
 		}
 		
 		if update.Message.NewChatMembers != nil {
-				for _, member := range update.Message.NewChatMembers {
-					if member.IsBot && (member.UserName == "pirdun_ai_bot" || member.ID == bot.Self.ID) {
-						continue // ← бот добавлен — ничего не делаем
-					}
-				}
-			}
+			continue
+		}
 
 		userID := update.Message.From.ID
 		userStats := userManager.GetUser(userID, update.SentFrom().UserName, conf)
 		role := getUserRole(userID, conf)
 
 		// Персональное меню команд только в личных чатах
-		if update.Message.Chat.Type == "private" {
-			go bot.Request(tgbotapi.NewSetMyCommands(getBotCommands(userID, conf)...))
+		if update.Message.Chat.Type == "private" && !userStats.CommandsSet {
+			bot.Request(tgbotapi.NewSetMyCommandsWithScopeAndLang(
+				getBotCommands(userID, conf),
+				tgbotapi.BotCommandScopeChat{ChatID: userID},
+				conf.Lang,
+			))
+			userStats.CommandsSet = true
 		}
 
 		// Гости не могут использовать команды, кроме start и pirdun
