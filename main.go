@@ -116,13 +116,9 @@ func main() {
 			continue
 		}
 
-		// === 1. Тихо игнорируем только добавление НАШЕГО бота в группу ===
+		// === 1. Тихо игнорируем только добавление бота в группу ===
 		if update.Message.NewChatMembers != nil {
-			for _, member := range update.Message.NewChatMembers {
-				if member.IsBot && (member.UserName == "pirdun_ai_bot" || member.ID == bot.Self.ID) {
-					continue // ← нас добавили — ничего не отвечаем и не спамим команды
-				}
-			}
+			continue
 		}
 
 		userID := update.Message.From.ID
