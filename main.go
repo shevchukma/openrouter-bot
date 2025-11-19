@@ -113,16 +113,13 @@ func main() {
 			continue
 		}
 		
-		// Игнорируем служебные сообщения (добавление в группу и т.д.)
-		//if update.Message.NewChatMembers != nil ||
-		//	update.Message.LeftChatMember != nil ||
-		//	update.Message.GroupChatCreated ||
-		//	update.Message.SuperGroupChatCreated ||
-		//	update.Message.ChannelChatCreated ||
-		//	update.Message.MigrateToChatID != 0 ||
-		//	update.Message.MigrateFromChatID != 0 {
-		//	continue
-		//}
+		if update.Message.NewChatMembers != nil {
+			for _, member := range *update.Message.NewChatMembers {
+				if member.UserName == "pirdun_ai_bot" || member.ID == bot.Self.ID {
+					continue
+				}
+			}
+		}
 
 		userID := update.Message.From.ID
 		userStats := userManager.GetUser(userID, update.SentFrom().UserName, conf)
