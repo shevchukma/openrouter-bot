@@ -9,6 +9,7 @@ import (
 	"openrouter-bot/user"
 	"strconv"
 	"strings"
+	"sync"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sashabaranov/go-openai"
@@ -65,6 +66,8 @@ func getBotCommands(userID int64, conf *config.Config) []tgbotapi.BotCommand {
 	}
 }
 
+var commandsSent sync.Map
+
 func main() {
 	err := lang.LoadTranslations("./lang/")
 	if err != nil {
@@ -112,32 +115,29 @@ func main() {
 		if update.Message == nil {
 			continue
 		}
-		
+
+		// === 1. Тихо игнорируем только добавление НАШЕГО бота в группу ===
 		if update.Message.NewChatMembers != nil {
-			continue
+			for _, member := range update.Message.NewChatMembers {
+				if member.IsBot && (member.UserName == "pirdun_ai_bot" || member.ID == bot.Self.ID) {
+					continue // ← нас добавили — ничего не отвечаем и не спамим команды
+				}
+			}
 		}
 
 		userID := update.Message.From.ID
-		userStats := userManager.GetUser(userID, update.SentFrom().UserName, conf)
+		username := ""
+		if update.Message.From != nil {
+			username = update.Message.From.UserName
+		}
+		userStats := userManager.GetUser(userID, username, conf)
 		role := getUserRole(userID, conf)
 
-		// Персональное меню команд только в личных чатах
-		if update.Message.Chat.Type == "private" && !userStats.CommandsSet {
-			bot.Request(tgbotapi.NewSetMyCommandsWithScopeAndLang(
-				getBotCommands(userID, conf),
-				tgbotapi.BotCommandScopeChat{ChatID: userID},
-				conf.Lang,
-			))
-			userStats.CommandsSet = true
-		}
-
-		// Гости не могут использовать команды, кроме start и pirdun
-		if role == "guest" && update.Message.IsCommand() {
-			cmd := update.Message.Command()
-			if cmd != "start" && cmd != "pirdun" {
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "У вас нет доступа к командам.")
-				bot.Send(msg)
-				continue
+		if update.Message.Chat.Type == "private" {
+			type void struct{}
+			var member void
+			if _, loaded := commandsSent.LoadOrStore(userID, member); !loaded {
+				bot.Request(tgbotapi.NewSetMyCommands(getBotCommands(userID, conf)...))
 			}
 		}
 
