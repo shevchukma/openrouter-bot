@@ -109,20 +109,20 @@ func main() {
 	userManager := user.NewUserManager("logs")
 
 	for update := range updates {
-		if update.Message == nil {
-			continue
-		}
-
-		// Игнорируем служебные сообщения (добавление в группу и т.д.)
-		if update.Message.NewChatMembers != nil ||
-			update.Message.LeftChatMember != nil ||
-			update.Message.GroupChatCreated ||
-			update.Message.SuperGroupChatCreated ||
-			update.Message.ChannelChatCreated ||
-			update.Message.MigrateToChatID != 0 ||
-			update.Message.MigrateFromChatID != 0 {
-			continue
-		}
+		//if update.Message == nil {
+		//	continue
+		//}
+		//
+		//// Игнорируем служебные сообщения (добавление в группу и т.д.)
+		//if update.Message.NewChatMembers != nil ||
+		//	update.Message.LeftChatMember != nil ||
+		//	update.Message.GroupChatCreated ||
+		//	update.Message.SuperGroupChatCreated ||
+		//	update.Message.ChannelChatCreated ||
+		//	update.Message.MigrateToChatID != 0 ||
+		//	update.Message.MigrateFromChatID != 0 {
+		//	continue
+		//}
 
 		userID := update.Message.From.ID
 		userStats := userManager.GetUser(userID, update.SentFrom().UserName, conf)
