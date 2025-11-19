@@ -114,12 +114,12 @@ func main() {
 		}
 		
 		if update.Message.NewChatMembers != nil {
-			for _, member := range *update.Message.NewChatMembers {
-				if member.UserName == "pirdun_ai_bot" || member.ID == bot.Self.ID {
-					continue
+				for _, member := range update.Message.NewChatMembers {
+					if member.IsBot && (member.UserName == "pirdun_ai_bot" || member.ID == bot.Self.ID) {
+						continue // ← бот добавлен — ничего не делаем
+					}
 				}
 			}
-		}
 
 		userID := update.Message.From.ID
 		userStats := userManager.GetUser(userID, update.SentFrom().UserName, conf)
