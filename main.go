@@ -81,7 +81,7 @@ func main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	bot.Debug = false
+	bot.Debug = true
 
 	_, err = bot.Request(tgbotapi.DeleteWebhookConfig{})
 	if err != nil {
