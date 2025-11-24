@@ -144,10 +144,11 @@ func HandleChatGPTStreamResponse(
 	user.AddMessage(openai.ChatMessageRoleAssistant, answer)
 
 	// Отправляем ответ одним сообщением
-	msg := tgbotapi.NewMessage(message.Chat.ID, answer)
+	safe := tgbotapi.EscapeText(tgbotapi.ModeMarkdown, answer)
+	msg := tgbotapi.NewMessage(message.Chat.ID, safe)
 	msg.ParseMode = tgbotapi.ModeMarkdown
 	bot.Send(msg)
-
+	
 	return resp.ID
 }
 
